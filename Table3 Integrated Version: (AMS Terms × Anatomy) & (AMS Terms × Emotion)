@@ -1,0 +1,114 @@
+# ===================================================================
+# Integrated Version: (AMS Terms × Anatomy) & (AMS Terms × Emotion)
+# ===================================================================
+
+import pandas as pd
+import re
+from collections import Counter
+from itertools import product
+from tqdm import tqdm
+
+# --- Step 1: Define word lists for analysis ---
+
+# Core AMS terms (20 words)
+ams_terms = [
+    "sleep", "anxiety", "mood", "depression", "irritability",
+    "libido", "desire", "sexual", "erection", "morning",
+    "fatigue", "pain", "muscle", "strength", "back",
+    "joint", "sweating", "hot", "performance", "peak"
+]
+
+# Comparison group 1: Anatomical sites
+anatomical_sites = [
+    "head", "face", "eye", "ear", "nose", "mouth", "lip", "tongue", "tooth", "jaw", "throat", "neck",
+    "chest", "breast", "abdomen", "stomach", "back", "spine", "hip", "pelvis", "groin",
+    "shoulder", "arm", "elbow", "wrist", "hand", "finger", "thumb",
+    "leg", "thigh", "knee", "shin", "calf", "ankle", "foot", "heel", "toe",
+    "bladder", "kidney", "liver", "lung", "heart", "intestine", "bowel",
+    "muscle", "bone", "joint", "nerve", "skin", "gland"
+]
+
+# Comparison group 2: Emotion-related words and their categories
+emotion_map = {
+    'joy': 'Joy', 'happy': 'Joy', 'pleased': 'Joy', 'relief': 'Joy', 'excited': 'Joy',
+    'sad': 'Sadness', 'depressed': 'Sadness', 'grief': 'Sadness', 'disappointed': 'Sadness', 'hopeless': 'Sadness',
+    'fear': 'Fear/Anxiety', 'anxious': 'Fear/Anxiety', 'worried': 'Fear/Anxiety', 'scared': 'Fear/Anxiety', 'nervous': 'Fear/Anxiety',
+    'angry': 'Anger', 'frustrated': 'Anger', 'annoyed': 'Anger', 'irritable': 'Anger', 'resentful': 'Anger',
+    'surprised': 'Surprise', 'shocked': 'Surprise', 'amazed': 'Surprise',
+    'trust': 'Trust', 'confident': 'Trust', 'supported': 'Trust',
+    'hope': 'Anticipation', 'optimistic': 'Anticipation', 'waiting': 'Anticipation'
+}
+emotion_words = list(emotion_map.keys())
+
+
+# --- Step 2: Prepare text corpus and compute both relationships ---
+
+# ▼▼▼ Paste or load your corpus here ▼▼▼
+text_corpus = """
+My libido is gone and I feel so sad and hopeless about it.
+I have severe pain in my back and joints, making it hard to sleep.
+The constant fatigue makes me angry and frustrated with myself.
+I have so much anxiety about my performance, I'm worried all the time.
+The doctor said my muscle strength is decreasing. I feel this in my arms and legs.
+"""
+# ▲▲▲ End of corpus ▲▲▲
+
+# Tokenize text
+tokens = re.findall(r'\b[a-z]+\b', text_corpus.lower())
+print(f"✅ Text successfully loaded and tokenized. Total words: {len(tokens)}")
+
+if not tokens:
+    print("No text provided. Analysis aborted.")
+else:
+    # Initialize counters for both relationships
+    cooc_anatomy = Counter()
+    cooc_emotion = Counter()
+    window_size = 10
+
+    # Convert to sets for faster lookup
+    ams_terms_set = set(ams_terms)
+    anatomical_sites_set = set(anatomical_sites)
+    emotion_words_set = set(emotion_words)
+
+    print("Calculating dual co-occurrence relations (AMS×Anatomy and AMS×Emotion)...")
+    for i in tqdm(range(len(tokens) - window_size + 1)):
+        window = tokens[i:i + window_size]
+        present_ams = {t for t in window if t in ams_terms_set}
+
+        if present_ams:
+            # (1) AMS × Anatomical Site
+            present_sites = {t for t in window if t in anatomical_sites_set}
+            if present_sites:
+                for ams_word, anatomy_word in product(present_ams, present_sites):
+                    cooc_anatomy[(ams_word, anatomy_word)] += 1
+
+            # (2) AMS × Emotion
+            present_emotions = {t for t in window if t in emotion_words_set}
+            if present_emotions:
+                for ams_word, emotion_word in product(present_ams, present_emotions):
+                    cooc_emotion[(ams_word, emotion_word)] += 1
+
+    print("✅ Co-occurrence computation completed.")
+
+    # --- Step 3: Display results for both analyses ---
+
+    # Result 1: AMS × Anatomical Site
+    print("\n--- [Result 1] AMS Terms × Anatomical Sites ---")
+    if not cooc_anatomy:
+        print("No AMS–anatomy relationships found.")
+    else:
+        df_anatomy = pd.DataFrame(cooc_anatomy.items(), columns=['Pair', 'Count'])
+        df_anatomy[['AMS_Term', 'Anatomical_Site']] = pd.DataFrame(df_anatomy['Pair'].tolist(), index=df_anatomy.index)
+        df_anatomy = df_anatomy[['AMS_Term', 'Anatomical_Site', 'Count']].sort_values(by='Count', ascending=False).reset_index(drop=True)
+        print(df_anatomy)
+
+    # Result 2: AMS × Emotion
+    print("\n--- [Result 2] AMS Terms × Emotion Words ---")
+    if not cooc_emotion:
+        print("No AMS–emotion relationships found.")
+    else:
+        df_emotion = pd.DataFrame(cooc_emotion.items(), columns=['Pair', 'Count'])
+        df_emotion[['AMS_Term', 'Emotion_Word']] = pd.DataFrame(df_emotion['Pair'].tolist(), index=df_emotion.index)
+        df_emotion['Emotion_Category'] = df_emotion['Emotion_Word'].map(emotion_map)
+        df_emotion = df_emotion[['AMS_Term', 'Emotion_Word', 'Emotion_Category', 'Count']].sort_values(by='Count', ascending=False).reset_index(drop=True)
+        print(df_emotion)
