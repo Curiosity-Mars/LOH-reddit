@@ -1,0 +1,86 @@
+# ===================================================================
+# Improved Version: Symptom × Anatomical Site Co-occurrence Analysis
+# ===================================================================
+
+import pandas as pd
+import re
+from collections import Counter
+from itertools import product
+from tqdm import tqdm
+
+# --- Step 1: Define lists of terms for analysis ---
+
+# List of symptom-related words (modifiable as needed)
+symptom_terms = [
+    "pain", "ache", "sore", "discomfort", "burning", "stinging", "sharp",
+    "dull", "throbbing", "cramp", "stiffness", "numbness", "tingling",
+    "weakness", "fatigue", "swelling", "itch", "rash", "pressure", "tension"
+]
+
+# List of anatomical site terms
+anatomical_sites = [
+    # Head, face, neck
+    "head", "face", "eye", "ear", "nose", "mouth", "lip", "tongue", "tooth", "jaw", "throat", "neck",
+    # Trunk
+    "chest", "breast", "abdomen", "stomach", "back", "spine", "hip", "pelvis", "groin",
+    # Upper limbs
+    "shoulder", "arm", "elbow", "wrist", "hand", "finger", "thumb",
+    # Lower limbs
+    "leg", "thigh", "knee", "shin", "calf", "ankle", "foot", "heel", "toe",
+    # Internal organs and tissues
+    "bladder", "kidney", "liver", "lung", "heart", "intestine", "bowel",
+    "muscle", "bone", "joint", "nerve", "skin", "gland"
+]
+
+
+# --- Step 2: Prepare text data and count co-occurrences ---
+
+# ▼▼▼ Paste or load your corpus here ▼▼▼
+text_corpus = """
+For example, many patients reported sharp pain in the lower back and hip area.
+Another common complaint was a dull ache in the shoulder and neck.
+Some experienced numbness in their fingers and toes.
+I feel a burning sensation in my bladder and urethra.
+The patient has stomach cramps and abdominal pressure.
+"""
+# ▲▲▲ End of corpus ▲▲▲
+
+# Convert to lowercase and tokenize
+tokens = re.findall(r'\b[a-z]+\b', text_corpus.lower())
+print(f"✅ Text successfully loaded and tokenized. Total words: {len(tokens)}")
+
+if not tokens:
+    print("No text provided. Analysis aborted.")
+else:
+    # Initialize counter for co-occurrence pairs
+    co_occurrences = Counter()
+    window_size = 7  # Sliding window for co-occurrence detection
+
+    # Convert lists to sets for faster lookup
+    symptom_terms_set = set(symptom_terms)
+    anatomical_sites_set = set(anatomical_sites)
+
+    print("Calculating co-occurrences between symptom and anatomical terms...")
+    for i in tqdm(range(len(tokens) - window_size + 1)):
+        window = tokens[i:i + window_size]
+
+        present_symptoms = {t for t in window if t in symptom_terms_set}
+        present_sites = {t for t in window if t in anatomical_sites_set}
+
+        if present_symptoms and present_sites:
+            for symptom_word, anatomy_word in product(present_symptoms, present_sites):
+                pair = (symptom_word, anatomy_word)
+                co_occurrences[pair] += 1
+
+    print("✅ Co-occurrence calculation completed.")
+
+    # --- Step 3: Identify strong pairs and display results ---
+    if not co_occurrences:
+        print("No symptom–site co-occurrences found.")
+    else:
+        df_cooc = pd.DataFrame(co_occurrences.items(), columns=['Symptom-Site_Pair', 'Count'])
+        df_cooc[['Symptom', 'Anatomical_Site']] = pd.DataFrame(df_cooc['Symptom-Site_Pair'].tolist(), index=df_cooc.index)
+        df_cooc = df_cooc[['Symptom', 'Anatomical_Site', 'Count']].sort_values(by='Count', ascending=False).reset_index(drop=True)
+
+        print("\n--- Results: Symptom × Anatomical Site Co-occurrence Analysis ---")
+        print(df_cooc)
