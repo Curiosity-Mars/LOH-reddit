@@ -1,0 +1,98 @@
+# ===================================================================
+# 最終版：3要素（AMS症状 × 解剖 × 感情）相関分析プログラム
+# ===================================================================
+
+import pandas as pd
+import re
+from collections import Counter
+from itertools import product
+from tqdm import tqdm
+
+# --- ステップ1: 3種類の分析対象リストを定義 ---
+
+# 軸となる「AMS用語」リスト
+ams_terms = [
+    "sleep", "anxiety", "mood", "depression", "irritability", "libido",
+    "desire", "sexual", "erection", "morning", "fatigue", "pain",
+    "muscle", "strength", "back", "joint", "sweating", "hot",
+    "performance", "peak"
+]
+
+# 「解剖部位」に関連する言葉のリスト
+anatomical_sites = [
+    "head", "face", "eye", "ear", "nose", "mouth", "lip", "tongue",
+    "tooth", "jaw", "throat", "neck", "chest", "breast", "abdomen",
+    "stomach", "back", "spine", "hip", "pelvis", "groin", "shoulder",
+    "arm", "elbow", "wrist", "hand", "finger", "thumb", "leg", "thigh",
+    "knee", "shin", "calf", "ankle", "foot", "heel", "toe", "bladder",
+    "kidney", "liver", "lung", "heart", "intestine", "bowel", "muscle",
+    "bone", "joint", "nerve", "skin", "gland"
+]
+
+# 「感情」に関連する言葉のリストとカテゴリ
+emotion_map = {
+    'joy': 'Joy', 'happy': 'Joy', 'pleased': 'Joy', 'relief': 'Joy',
+    'excited': 'Joy', 'sad': 'Sadness', 'depressed': 'Sadness',
+    'grief': 'Sadness', 'disappointed': 'Sadness', 'hopeless': 'Sadness',
+    'fear': 'Fear/Anxiety', 'anxious': 'Fear/Anxiety', 'worried': 'Fear/Anxiety',
+    'scared': 'Fear/Anxiety', 'nervous': 'Fear/Anxiety', 'angry': 'Anger',
+    'frustrated': 'Anger', 'annoyed': 'Anger', 'irritable': 'Anger',
+    'resentful': 'Anger', 'surprised': 'Surprise', 'shocked': 'Surprise',
+    'amazed': 'Surprise', 'trust': 'Trust', 'confident': 'Trust',
+    'supported': 'Trust', 'hope': 'Anticipation', 'optimistic': 'Anticipation',
+    'waiting': 'Anticipation'
+}
+emotion_words = list(emotion_map.keys())
+
+
+# --- ステップ2: テキストデータの準備と3要素の相関をカウント ---
+
+# ▼▼▼ ここに分析したいテキストデータを貼り付けてください ▼▼▼
+text_corpus = """
+My libido is gone and I feel so sad and hopeless about it.
+I have severe pain in my back, and this situation makes me feel sad and hopeless.
+The constant fatigue makes me angry and frustrated with myself. My whole body feels weak.
+I have so much anxiety and I'm worried about my performance in the chest area, it feels tight.
+The doctor said my muscle strength is decreasing. I feel this in my arms and legs, and it's frustrating.
+"""
+# ▲▲▲ ここまで ▲▲▲
+
+tokens = re.findall(r'\b[a-z]+\b', text_corpus.lower())
+print(f"✅ テキストの読み込みと処理が完了しました。総単語数: {len(tokens)}")
+
+if not tokens:
+    print("テキストが入力されていません。")
+else:
+    cooc_triplets = Counter()
+    window_size = 15 # 3つの要素が含まれる可能性があるため、ウィンドウを広めに設定
+
+    ams_terms_set = set(ams_terms)
+    anatomical_sites_set = set(anatomical_sites)
+    emotion_words_set = set(emotion_words)
+
+    print("3要素（症状・解剖・感情）の相関を計算中...")
+    for i in tqdm(range(len(tokens) - window_size + 1)):
+        window = tokens[i:i+window_size]
+
+        present_ams = {t for t in window if t in ams_terms_set}
+        present_sites = {t for t in window if t in anatomical_sites_set}
+        present_emotions = {t for t in window if t in emotion_words_set}
+
+        # ★★★ 3種類すべての要素がウィンドウ内に存在する場合のみカウント ★★★
+        if present_ams and present_sites and present_emotions:
+            for ams_word, site_word, emotion_word in product(present_ams, present_sites, present_emotions):
+                triplet = (ams_word, site_word, emotion_word)
+                cooc_triplets[triplet] += 1
+
+    print("✅ 相関の計算が完了しました。")
+
+    # --- ステップ3: 3要素の相関分析結果を表示 ---
+    print("\n--- 【最終結果】3要素（AMS症状 × 解剖部位 × 感情）の相関分析 ---")
+    if not cooc_triplets:
+        print("3要素が同時に出現するケースは見つかりませんでした。")
+    else:
+        df_triplets = pd.DataFrame(cooc_triplets.items(), columns=['Triplet', 'Count'])
+        df_triplets[['AMS_Term', 'Anatomical_Site', 'Emotion_Word']] = pd.DataFrame(df_triplets['Triplet'].tolist(), index=df_triplets.index)
+        df_triplets['Emotion_Category'] = df_triplets['Emotion_Word'].map(emotion_map)
+        df_triplets = df_triplets[['AMS_Term', 'Anatomical_Site', 'Emotion_Word', 'Emotion_Category', 'Count']].sort_values(by='Count', ascending=False).reset_index(drop=True)
+        print(df_triplets)
