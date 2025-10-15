@@ -1,0 +1,81 @@
+# ================================================================
+# Figure 2b: AMS-Only Symptom Network (24 Terms, Louvain Clustering)
+# ================================================================
+
+import matplotlib.pyplot as plt
+import networkx as nx
+import community.community_louvain as community_louvain
+
+# --- Define AMS terms (24 terms; "sweating" excluded) ---
+ams_terms = [
+    "sleep", "anxiety", "mood", "depression", "irritability",
+    "libido", "desire", "sexual", "erection", "morning",
+    "fatigue", "pain", "muscle", "strength", "back",
+    "joint", "hot", "performance", "peak",
+    "tired", "energy", "motivation", "weakness"
+]
+
+# --- Extract AMS-only subgraph from full network G ---
+ams_nodes = [n for n in G.nodes() if n in ams_terms]
+G_ams = G.subgraph(ams_nodes).copy()
+
+# --- Louvain community detection ---
+partition = community_louvain.best_partition(G_ams, weight='weight')
+nx.set_node_attributes(G_ams, partition, 'cluster')
+
+# --- Compute spring layout ---
+pos = nx.spring_layout(G_ams, k=0.5, iterations=200, weight='weight', seed=42)
+
+# --- Assign cluster colors (consistent with Figure 2 palette) ---
+clusters = set(partition.values())
+colors = plt.cm.tab10(range(len(clusters)))
+
+plt.figure(figsize=(9, 9))
+
+# --- Draw nodes by community cluster ---
+for i, cluster_id in enumerate(clusters):
+    nodes_in_cluster = [n for n, c in partition.items() if c == cluster_id]
+    nx.draw_networkx_nodes(
+        G_ams, pos,
+        nodelist=nodes_in_cluster,
+        node_color=[colors[i]],
+        node_size=600,
+        alpha=0.85,
+        edgecolors='black',
+        linewidths=0.4,
+        label=f'Cluster {cluster_id}'
+    )
+
+# --- Draw initial edges ---
+nx.draw_networkx_edges(G_ams, pos, width=0.7, alpha=0.35)
+
+# --- Label all nodes ---
+nx.draw_networkx_labels(G_ams, pos, font_size=10, font_weight='bold')
+
+# --- Node sizes proportional to degree centrality ---
+degree_dict = nx.degree_centrality(G)
+node_sizes = [300 + degree_dict[n] * 3000 for n in G_ams.nodes()]
+
+# --- Edge widths proportional to co-occurrence weight ---
+edge_widths = [G_ams[u][v]['weight'] * 0.05 for u, v in G_ams.edges()]
+
+# --- Redraw nodes with degree-based sizing and color by cluster ---
+nx.draw_networkx_nodes(
+    G_ams, pos,
+    nodelist=G_ams.nodes(),
+    node_color=[colors[partition[n]] for n in G_ams.nodes()],
+    node_size=node_sizes,
+    alpha=0.85,
+    edgecolors='black',
+    linewidths=0.4,
+)
+
+# --- Redraw edges with weighted widths ---
+nx.draw_networkx_edges(G_ams, pos, width=edge_widths, alpha=0.35)
+
+# --- Save and download output ---
+plt.savefig('/content/Figure2A_AMS_Only_Louvain.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+from google.colab import files
+files.download('/content/Figure2A_AMS_Only_Louvain.png')
